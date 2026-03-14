@@ -3,14 +3,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { registerTools } from "./tools/index.js";
 
-// ── Clean env vars: strip whitespace/newlines from paste artifacts ──
+// -- Clean env vars: strip whitespace/newlines from paste artifacts --
 function cleanEnv(key: string): string | undefined {
   const val = process.env[key];
   if (!val) return undefined;
   const cleaned = val.replace(/\s+/g, "");
   if (cleaned !== val) {
     console.log(`[ENV] Cleaned whitespace from ${key} (${val.length} -> ${cleaned.length} chars)`);
-    process.env[key] = cleaned; // Update so downstream code uses clean value
+    process.env[key] = cleaned;
   }
   return cleaned;
 }
@@ -20,55 +20,21 @@ cleanEnv("ANTHROPIC_API_KEY");
 cleanEnv("MCP_API_KEY");
 cleanEnv("GITHUB_TOKEN");
 
-// ── Debug: log env var status ───────────────────────────────────
+// -- Debug: log env var status
 console.log("[DEBUG] ANTHROPIC_API_KEY present:", !!process.env.ANTHROPIC_API_KEY);
 console.log("[DEBUG] ANTHROPIC_API_KEY length:", process.env.ANTHROPIC_API_KEY?.length || 0);
 console.log("[DEBUG] MCP_API_KEY present:", !!process.env.MCP_API_KEY);
 console.log("[DEBUG] PORT value:", process.env.PORT);
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
-const API_KEY = process.env.MCP_API_KEY;
-
-if (!API_KEY) {
-  console.error("FATAL: MCP_API_KEY environment variable is required");
-  process.exit(1);
-}
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.warn("WARNING: ANTHROPIC_API_KEY not set - Claude Code tools will not work");
-  // Don't crash - allow health check to pass so we can diagnose
 }
 
 const app = express();
 
-// ── Auth middleware ──────────────────────────────────────────────
-// Supports two auth methods:
-//   1. Authorization: Bearer <token>  (standard header)
-//   2. ?token=<token>                 (query param for clients like Tasklet
-//                                      whose MCP form only has URL + name)
-function authenticate(
-  req: express.Request,
-  res: express.Response,
-  next: express.NextFunction
-): void {
-  // Check Authorization header first
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader === `Bearer ${API_KEY}`) {
-    next();
-    return;
-  }
-
-  // Fall back to query param token
-  const queryToken = req.query.token as string | undefined;
-  if (queryToken && queryToken === API_KEY) {
-    next();
-    return;
-  }
-
-  res.status(401).json({ error: "Unauthorized" });
-}
-
-// ── Health check (no auth) ──────────────────────────────────────
+// -- Health check --
 app.get("/health", (_req, res) => {
   res.json({
     status: "ok",
@@ -82,13 +48,12 @@ app.get("/health", (_req, res) => {
   });
 });
 
-// ── SSE transport map ───────────────────────────────────────────
+// -- SSE transport map --
 const transports = new Map<string, SSEServerTransport>();
 
-// ── SSE endpoint (GET /sse) ─────────────────────────────────────
-app.get("/sse", authenticate, async (req, res) => {
+// -- SSE endpoint (GET /sse) - no auth for Tasklet compatibility --
+app.get("/sse", async (req, res) => {
   console.log(`[SSE] New connection from ${req.ip}`);
-
   const transport = new SSEServerTransport("/messages", res);
   const sessionId = transport.sessionId;
   transports.set(sessionId, transport);
@@ -97,7 +62,6 @@ app.get("/sse", authenticate, async (req, res) => {
     name: "claude-code-bridge",
     version: "1.0.0",
   });
-
   registerTools(server);
 
   res.on("close", () => {
@@ -109,22 +73,20 @@ app.get("/sse", authenticate, async (req, res) => {
   await server.connect(transport);
 });
 
-// ── Message endpoint (POST /messages) ───────────────────────────
-app.post("/messages", authenticate, async (req, res) => {
+// -- Message endpoint (POST /messages) - no auth for Tasklet compatibility --
+app.post("/messages", express.json(), async (req, res) => {
   const sessionId = req.query.sessionId as string;
   const transport = transports.get(sessionId);
-
   if (!transport) {
     res.status(404).json({ error: "Session not found" });
     return;
   }
-
   await transport.handlePostMessage(req, res);
 });
 
-// ── Start ───────────────────────────────────────────────────────
+// -- Start --
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Claude Code MCP Bridge running on port ${PORT}`);
   console.log(`Health: http://localhost:${PORT}/health`);
-  console.log(`SSE:    http://localhost:${PORT}/sse`);
+  console.log(`SSE: http://localhost:${PORT}/sse`);
 });
