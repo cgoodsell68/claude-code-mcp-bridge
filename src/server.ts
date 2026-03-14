@@ -69,11 +69,9 @@ app.get("/sse", async (req, res) => {
     transports.delete(sessionId);
   });
 
-  await transport.start();
   await server.connect(transport);
 });
 
-// -- Message endpoint (POST /messages) - no auth for Tasklet compatibility --
 app.post("/messages", express.json(), async (req, res) => {
   const sessionId = req.query.sessionId as string;
   const transport = transports.get(sessionId);
