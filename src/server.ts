@@ -3,6 +3,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { registerTools } from "./tools/index.js";
 
+// ── Debug: log env var keys to diagnose Railway injection ───────
+console.log("[DEBUG] Available env var keys:", Object.keys(process.env).sort().join(", "));
+console.log("[DEBUG] ANTHROPIC_API_KEY present:", !!process.env.ANTHROPIC_API_KEY);
+console.log("[DEBUG] MCP_API_KEY present:", !!process.env.MCP_API_KEY);
+console.log("[DEBUG] PORT value:", process.env.PORT);
+
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const API_KEY = process.env.MCP_API_KEY;
 
@@ -78,7 +84,7 @@ app.post("/messages", authenticate, async (req, res) => {
 });
 
 // ── Start ───────────────────────────────────────────────────────
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Claude Code MCP Bridge running on port ${PORT}`);
   console.log(`Health: http://localhost:${PORT}/health`);
   console.log(`SSE:    http://localhost:${PORT}/sse`);
