@@ -42,17 +42,30 @@ if (!process.env.ANTHROPIC_API_KEY) {
 const app = express();
 
 // ── Auth middleware ──────────────────────────────────────────────
+// Supports two auth methods:
+//   1. Authorization: Bearer <token>  (standard header)
+//   2. ?token=<token>                 (query param for clients like Tasklet
+//                                      whose MCP form only has URL + name)
 function authenticate(
   req: express.Request,
   res: express.Response,
   next: express.NextFunction
 ): void {
+  // Check Authorization header first
   const authHeader = req.headers.authorization;
-  if (!authHeader || authHeader !== `Bearer ${API_KEY}`) {
-    res.status(401).json({ error: "Unauthorized" });
+  if (authHeader && authHeader === `Bearer ${API_KEY}`) {
+    next();
     return;
   }
-  next();
+
+  // Fall back to query param token
+  const queryToken = req.query.token as string | undefined;
+  if (queryToken && queryToken === API_KEY) {
+    next();
+    return;
+  }
+
+  res.status(401).json({ error: "Unauthorized" });
 }
 
 // ── Health check (no auth) ──────────────────────────────────────
