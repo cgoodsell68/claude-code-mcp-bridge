@@ -19,5 +19,4 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 
-EXPOSE ${PORT:-3001}
-CMD ["node", "dist/server.js"]
+EXPOSE 3001
