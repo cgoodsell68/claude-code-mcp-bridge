@@ -3,9 +3,26 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { registerTools } from "./tools/index.js";
 
-// ── Debug: log env var keys to diagnose Railway injection ───────
-console.log("[DEBUG] Available env var keys:", Object.keys(process.env).sort().join(", "));
+// ── Clean env vars: strip whitespace/newlines from paste artifacts ──
+function cleanEnv(key: string): string | undefined {
+  const val = process.env[key];
+  if (!val) return undefined;
+  const cleaned = val.replace(/\s+/g, "");
+  if (cleaned !== val) {
+    console.log(`[ENV] Cleaned whitespace from ${key} (${val.length} -> ${cleaned.length} chars)`);
+    process.env[key] = cleaned; // Update so downstream code uses clean value
+  }
+  return cleaned;
+}
+
+// Clean critical env vars
+cleanEnv("ANTHROPIC_API_KEY");
+cleanEnv("MCP_API_KEY");
+cleanEnv("GITHUB_TOKEN");
+
+// ── Debug: log env var status ───────────────────────────────────
 console.log("[DEBUG] ANTHROPIC_API_KEY present:", !!process.env.ANTHROPIC_API_KEY);
+console.log("[DEBUG] ANTHROPIC_API_KEY length:", process.env.ANTHROPIC_API_KEY?.length || 0);
 console.log("[DEBUG] MCP_API_KEY present:", !!process.env.MCP_API_KEY);
 console.log("[DEBUG] PORT value:", process.env.PORT);
 
@@ -18,8 +35,8 @@ if (!API_KEY) {
 }
 
 if (!process.env.ANTHROPIC_API_KEY) {
-  console.error("FATAL: ANTHROPIC_API_KEY environment variable is required");
-  process.exit(1);
+  console.warn("WARNING: ANTHROPIC_API_KEY not set - Claude Code tools will not work");
+  // Don't crash - allow health check to pass so we can diagnose
 }
 
 const app = express();
@@ -40,7 +57,16 @@ function authenticate(
 
 // ── Health check (no auth) ──────────────────────────────────────
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", version: "1.0.0" });
+  res.json({
+    status: "ok",
+    version: "1.0.0",
+    env: {
+      anthropic_key_set: !!process.env.ANTHROPIC_API_KEY,
+      anthropic_key_length: process.env.ANTHROPIC_API_KEY?.length || 0,
+      mcp_key_set: !!process.env.MCP_API_KEY,
+      github_token_set: !!process.env.GITHUB_TOKEN,
+    },
+  });
 });
 
 // ── SSE transport map ───────────────────────────────────────────
