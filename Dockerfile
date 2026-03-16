@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI globally
 RUN npm install -g @anthropic-ai/claude-code
+RUN claude mcp add context-mode -- npx -y context-mode
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
